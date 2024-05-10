@@ -1,8 +1,12 @@
 import google.generativeai as genai
 import streamlit as st
 import boto3
+import os
 
 API_KEY = st.secrets['gemini_token']
+os.environ['Access_key_ID'] = st.secrets['Access_key_ID']
+os.environ['Secret_access_key'] = st.secrets['Secret_access_key']
+os.environ['region'] = st.secrets['region']
 
 
 class Ia:
