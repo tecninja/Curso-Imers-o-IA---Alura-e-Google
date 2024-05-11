@@ -1,5 +1,7 @@
 import streamlit as st
+from backend import Ia
 
+chat = Ia()
 
 class MeuApp:
     
@@ -18,7 +20,7 @@ class MeuApp:
             st.session_state.messages.append({"role": "user", "content": prompt})
             st.chat_message("user").write(prompt)
             
-            response = "futuro texto da ia"
+            response = chat.gerar_resposta(prompt=prompt)
             
             msg = response
             
