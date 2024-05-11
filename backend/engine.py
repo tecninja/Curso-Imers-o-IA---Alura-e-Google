@@ -5,17 +5,29 @@ import os
 import pandas as pd
 import io
 
-API_KEY = st.secrets['gemini_token']
-os.environ['Access key ID'] = st.secrets['AWS_ACCESS_KEY_ID']
-os.environ['Secret access key'] = st.secrets['AWS_SECRET_ACCESS_KEY']
-os.environ['region'] = st.secrets['AWS_DEFAULT_REGION']
+# As linhas a baixo maximizam a funcionalidade para o seu uso de maneira escalável
+# deixando o sistema independente da imposição da chave api em toda sessão, além
+# de guardar os objetos de contexto em nuvem da aws
+
+#API_KEY = st.secrets['gemini_token']
+# os.environ['Access key ID'] = st.secrets['AWS_ACCESS_KEY_ID']
+# os.environ['Secret access key'] = st.secrets['AWS_SECRET_ACCESS_KEY']
+# os.environ['region'] = st.secrets['AWS_DEFAULT_REGION']
 
 
 class Ia:
     
     def __init__(self) -> None:
+        API_KEY = st.session_state.api_key
         genai.configure(api_key=API_KEY)
-        model = genai.GenerativeModel(model_name="gemini-1.0-pro")
+        
+        if "modelo_selecionado" not in st.session_state:
+            st.session_state.modelo_selecionado = [0,"gemini-1.0-pro"]
+        
+        model_name = st.session_state.modelo_selecionado[1]
+        
+        model = genai.GenerativeModel(model_name=model_name)
+        
         if "history" not in st.session_state:
             st.session_state.history = []
         self.chat = model.start_chat(history=st.session_state.history)
@@ -32,19 +44,29 @@ class Ia:
                 df = pd.read_csv(csv_buffer)
                 self.contexto.append(df)
                 
-
-
     def gerar_resposta(self, prompt):
         
-        prompt_final = f"""
-        Responda a seguinte prompt: {prompt} 
-        Porém sua única fonte de dados deve ser os seguintes arquivos de contexto: {self.contexto}
-        """
-        
-        response = self.chat.send_message(prompt_final)
-        for parts in self.chat.history:
-            st.session_state.history.append(parts)
-        return response.text
+        if self.contexto == []:
+            prompt_final = prompt
+        else:
+            prompt_final = f"""
+            Responda a seguinte prompt: {prompt} 
+            Porém sua única fonte de dados deve ser os\
+            seguintes arquivos de contexto: {self.contexto}
+            """
+        try:
+            response = self.chat.send_message(prompt_final)
+            for parts in self.chat.history:
+                st.session_state.history.append(parts)
+            return response.text
+        except Exception as e:
+            return f"Desculpe houve um erro: {e}\nVerifique\
+                se suas credenciais de API Key foram passadas corretamente"
+            
+    
+    def pegar_modelos(self):
+        modelos = genai.list_models()
+        return modelos
     
 class Nuvem:
     
@@ -59,11 +81,13 @@ class Nuvem:
             arquivos_de_contexto = []
             objetos = self.listar_objetos()["objetos"]
             for item in objetos:
-                obj = self.s3.Object(self.BUCKET, item)
-                obj_content = obj.get()['Body'].read()
+
+                # obj = self.s3.Object(self.BUCKET, item)
+                # obj_content = obj.get()['Body'].read()
+
                 arquivos_de_contexto.append({
-                    "item_name":item,
-                    "item_content":obj_content
+                    "item_name":item['nome'],
+                    "item_content":item['conteudo']
                     }
                                             )
         except Exception as e:
@@ -83,7 +107,13 @@ class Nuvem:
     def enviar_objeto(self, obj, obj_name):
         
         try:
-            self.s3.Bucket(self.BUCKET).put_object(Key=obj_name, Body=obj)
+            # Usar a linha a baixo para subir aquivo num bucket s3
+            # self.s3.Bucket(self.BUCKET).put_object(Key=obj_name, Body=obj)
+            
+            st.session_state.objetos_contexto.append({
+                "nome": obj_name,
+                "conteudo":obj
+                    })
         except Exception as e:
             return {"status":False,
                     "contexto": f"Erro no envio do arquivo {obj_name}: {e}"}
@@ -94,19 +124,28 @@ class Nuvem:
 
     def listar_objetos(self):
         try:
-            bkt = self.s3.Bucket(self.BUCKET)
-            objetos = [obj.key for obj in bkt.objects.all()]
+            # Usar a linha a baixo para subir aquivo num bucket s3
+            # bkt = self.s3.Bucket(self.BUCKET)
+            # objetos = [obj.key for obj in bkt.objects.all()]
+            
+            lista_objetos = st.session_state.objetos_contexto
         except Exception as e:
             return {"status":False,
                     "contexto":f"Erro na busca - {e}"}
         else:
             return {"status":True,
                     "contexto":"Objetos listados com sucesso",
-                    "objetos":objetos}
+                    "objetos":lista_objetos}
     
     def apagar_objetos(self, obj_name):
         try:
-            self.s3.Object(self.BUCKET, obj_name).delete()
+            # Usar a linha a baixo para subir aquivo num bucket s3
+            # self.s3.Object(self.BUCKET, obj_name).delete()
+            
+            for o in st.session_state.objetos_contexto:
+                if o['nome'] == obj_name:
+                    st.session_state.objetos_contexto.remove(o)
+                    
         except Exception as e:
             return {"status":False,
                     "contexto": f"Erro ao apagar arquivo {obj_name}. Detalhamento: {e}"}
