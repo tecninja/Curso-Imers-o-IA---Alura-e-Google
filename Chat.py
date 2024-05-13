@@ -6,7 +6,7 @@ from backend import Ia
 class MeuApp:
     
     def __init__(self) -> None:
-        if "obejetos_contexto" not in st.session_state:
+        if "objetos_contexto" not in st.session_state:
             st.session_state.objetos_contexto = []    
         st.title("Asistente de Trabalho")
         st.divider()
@@ -21,8 +21,19 @@ class MeuApp:
         
         with st.sidebar:
             st.subheader("Informe sua API KEY do Gemini")
-            st.session_state.api_key = st.text_input("Api Key", type="password")
-            st.warning("Você precisa forcer uma chave de api válida para usar o sistema")
+            if "api_key" in st.session_state:
+                API_KEY = st.text_input("Api Key",
+                                        type="password",
+                                        value=st.session_state.api_key
+                                        )
+                st.session_state.api_key = API_KEY
+                st.warning("Você precisa forcer uma chave de api válida para usar o sistema")
+            else:
+                API_KEY = st.text_input("Api Key",
+                                        type="password",
+                                        )
+                st.session_state.api_key = API_KEY
+                st.warning("Você precisa forcer uma chave de api válida para usar o sistema")
         
         if "api_key" not in st.session_state or \
             st.session_state.api_key == "":
